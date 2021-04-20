@@ -123,6 +123,12 @@ h_NHEnergy(NULL)
 					bool(false)
 				);
 
+	registerProcessorParameter(	"useTrueJacobian",
+					"true: Use (mathematically) true Jacobian for the option E_cluster = |p|, false: for the option E_cluster = |p|, Use the same jacobian as the option E_cluster = E_kinetic",
+					m_useTrueJacobian,
+					bool(false)
+				);
+
 	registerProcessorParameter(	"storeRootTree",
 					"whether store output comparison in RootTree or not",
 					m_storeRootTree,
@@ -141,9 +147,7 @@ void AddNeutralPFOCovMat::init()
 {
 
 	streamlog_out(MESSAGE) << "   init called  " << std::endl;
-	m_Bfield = MarlinUtil::getBzAtOrigin();
 	printParameters();
-	streamlog_out(MESSAGE) << " BField =  "<< m_Bfield << " Tesla" << std::endl ;
 	m_nRun = 0 ;
 	m_nEvt = 0 ;
 	m_nRunSum = 0;
@@ -829,8 +833,6 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 {
 	LCRelationNavigator navClusterMCTruth(pLCEvent->getCollection(m_ClusterMCTruthLinkCollection));
 	LCRelationNavigator navMCTruthCluster(pLCEvent->getCollection(m_MCTruthClusterLinkCollection));
-	LCRelationNavigator navTrackMCTruth(pLCEvent->getCollection(m_TrackMCTruthLinkCollection));
-	LCRelationNavigator navMCTruthTrack(pLCEvent->getCollection(m_MCTruthTrackLinkCollection));
 	streamlog_out(DEBUG) << "PFO has " << nTrackspfo << " tracks and " << nClusterspfo << " clusters" << std::endl;
 
 	int NeutralsPDGCode[14]{11,13,22,130,211,310,321,2112,2212,3112,3122,3222,3312,3322};
@@ -980,7 +982,6 @@ void AddNeutralPFOCovMat::end()
 	h_NormalizedResidualEnergy_ph->Write();
 	h_NormalizedResidualTheta_ph->Write();
 	h_NormalizedResidualPhi_ph->Write();
-	m_ErrorParameterization->cd();
 	m_NeutralPFO->cd();
 	h_ResidualEnergy_NH->Write();
 	h_ResidualTheta_NH->Write();
@@ -991,7 +992,6 @@ void AddNeutralPFOCovMat::end()
 	h_NormalizedResidualEnergy_NH->Write();
 	h_NormalizedResidualTheta_NH->Write();
 	h_NormalizedResidualPhi_NH->Write();
-	m_ErrorParameterization->cd();
 	m_pTFile->Close();
 	delete m_pTFile;
 
