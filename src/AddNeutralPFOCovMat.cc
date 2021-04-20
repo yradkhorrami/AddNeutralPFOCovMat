@@ -23,11 +23,11 @@ using namespace lcio ;
 using namespace marlin ;
 using namespace std ;
 
-AddFourMomentumCovMatAllPFOs aAddFourMomentumCovMatAllPFOs;
+AddNeutralPFOCovMat aAddNeutralPFOCovMat;
 
-AddFourMomentumCovMatAllPFOs::AddFourMomentumCovMatAllPFOs() :
+AddNeutralPFOCovMat::AddNeutralPFOCovMat() :
 
-Processor("AddFourMomentumCovMatAllPFOs"),
+Processor("AddNeutralPFOCovMat"),
 m_nRun(0),
 m_nEvt(0),
 m_nRunSum(0),
@@ -137,7 +137,7 @@ h_NHEnergy(NULL)
 
 }
 
-void AddFourMomentumCovMatAllPFOs::init()
+void AddNeutralPFOCovMat::init()
 {
 
 	streamlog_out(MESSAGE) << "   init called  " << std::endl;
@@ -283,7 +283,7 @@ void AddFourMomentumCovMatAllPFOs::init()
 
 }
 
-void AddFourMomentumCovMatAllPFOs::Clear()
+void AddNeutralPFOCovMat::Clear()
 {
 	m_foundLinkedMCP.clear();
 	m_mcEnergy.clear();
@@ -335,7 +335,7 @@ void AddFourMomentumCovMatAllPFOs::Clear()
 	m_NormalizedResidualPhi_NH.clear();
 }
 
-void AddFourMomentumCovMatAllPFOs::processRunHeader()
+void AddNeutralPFOCovMat::processRunHeader()
 {
 
 	m_nRun = 0;
@@ -344,7 +344,7 @@ void AddFourMomentumCovMatAllPFOs::processRunHeader()
 
 }
 
-void AddFourMomentumCovMatAllPFOs::processEvent( EVENT::LCEvent *pLCEvent )
+void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 {
 
 	m_nRun = pLCEvent->getRunNumber();
@@ -371,7 +371,7 @@ void AddFourMomentumCovMatAllPFOs::processEvent( EVENT::LCEvent *pLCEvent )
 
 }
 
-std::vector<float> AddFourMomentumCovMatAllPFOs::UpdateNeutralPFOCovMat( TVector3 clusterPosition , float pfoEc , float pfoMass , std::vector<float> clusterPositionError , float clusterEnergyError )
+std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 clusterPosition , float pfoEc , float pfoMass , std::vector<float> clusterPositionError , float clusterEnergyError )
 {
 
 //	Obtain covariance matrix on (px,py,pz,E) from the
@@ -540,7 +540,7 @@ std::vector<float> AddFourMomentumCovMatAllPFOs::UpdateNeutralPFOCovMat( TVector
 
 }
 
-std::vector<float> AddFourMomentumCovMatAllPFOs::getClusterDirectionError( TVector3 clusterPosition , std::vector<float> clusterPositionError )
+std::vector<float> AddNeutralPFOCovMat::getClusterDirectionError( TVector3 clusterPosition , std::vector<float> clusterPositionError )
 {
 
 //	Obtain covariance matrix on (R,Theta,Phi) from the
@@ -653,7 +653,7 @@ std::vector<float> AddFourMomentumCovMatAllPFOs::getClusterDirectionError( TVect
 
 }
 
-std::vector<float> AddFourMomentumCovMatAllPFOs::getPFOResidual( TLorentzVector pfoFourMomentum , TLorentzVector mcpFourMomentum )
+std::vector<float> AddNeutralPFOCovMat::getPFOResidual( TLorentzVector pfoFourMomentum , TLorentzVector mcpFourMomentum )
 {
 	std::vector<float> pfoResidual;
 
@@ -698,7 +698,7 @@ std::vector<float> AddFourMomentumCovMatAllPFOs::getPFOResidual( TLorentzVector 
 
 }
 
-std::vector<float> AddFourMomentumCovMatAllPFOs::getPFOCovMatPolarCoordinate( TLorentzVector pfoFourMomentum , std::vector<float> pfoCovMat )
+std::vector<float> AddNeutralPFOCovMat::getPFOCovMatPolarCoordinate( TLorentzVector pfoFourMomentum , std::vector<float> pfoCovMat )
 {
 
 //	Obtain covariance matrix on (Theta,Phi,P,E) from the
@@ -825,7 +825,7 @@ std::vector<float> AddFourMomentumCovMatAllPFOs::getPFOCovMatPolarCoordinate( TL
 
 }
 
-TLorentzVector AddFourMomentumCovMatAllPFOs::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int nTrackspfo , int nClusterspfo )
+TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int nTrackspfo , int nClusterspfo )
 {
 	LCRelationNavigator navClusterMCTruth(pLCEvent->getCollection(m_ClusterMCTruthLinkCollection));
 	LCRelationNavigator navMCTruthCluster(pLCEvent->getCollection(m_MCTruthClusterLinkCollection));
@@ -925,7 +925,7 @@ TLorentzVector AddFourMomentumCovMatAllPFOs::getLinkedMCP( EVENT::LCEvent *pLCEv
 
 }
 
-void AddFourMomentumCovMatAllPFOs::check(EVENT::LCEvent *pLCEvent)
+void AddNeutralPFOCovMat::check(EVENT::LCEvent *pLCEvent)
 {
 
 	LCCollection *inputPfoCollection{};
@@ -945,7 +945,7 @@ void AddFourMomentumCovMatAllPFOs::check(EVENT::LCEvent *pLCEvent)
 
 }
 
-void AddFourMomentumCovMatAllPFOs::end()
+void AddNeutralPFOCovMat::end()
 {
 
 	m_pTFile->cd();
