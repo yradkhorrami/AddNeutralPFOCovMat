@@ -426,8 +426,9 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			{
 				mcpFourMomentum = this->getLinkedMCP( pLCEvent , inputPFO, linkedMCP_PDGCode );
 			}
+			outputPfoCollection->addElement( outputPFO );
 		}
-		streamlog_out(DEBUG) << "Investigated All PFOs" << std::endl;
+		pLCEvent->addCollection( outputPfoCollection , m_outputPfoCollection );
 		m_pTTree->Fill();
 	}
         catch(DataNotAvailableException &e)
