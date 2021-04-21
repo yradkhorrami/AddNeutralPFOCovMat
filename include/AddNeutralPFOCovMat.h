@@ -49,7 +49,7 @@ class AddNeutralPFOCovMat : public Processor
 		std::vector<float> getClusterDirectionError( TVector3 clusterPosition , std::vector<float> clusterPositionError );
 		std::vector<float> getPFOResidual( TLorentzVector pfoFourMomentum , TLorentzVector mcpFourMomentum );
 		std::vector<float> getPFOCovMatPolarCoordinate( TLorentzVector pfoFourMomentum , std::vector<float> pfoCovMat );
-		TLorentzVector getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int nTrackspfo , int nClusterspfo );
+		TLorentzVector getLinkedMCP( EVENT::LCEvent *pLCEvent , EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode );
 		virtual void check( EVENT::LCEvent *pLCEvent );
 		virtual void end();
 

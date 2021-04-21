@@ -364,11 +364,6 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 	streamlog_out(MESSAGE) << "	////////////////////	Processing event 	" << m_nEvt << "	////////////////////" << std::endl;
 	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
 
-	streamlog_out(MESSAGE) << "" << std::endl;
-	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
-	streamlog_out(MESSAGE) << "	////////////////////	Processing event 	" << m_nEvt << "	////////////////////" << std::endl;
-	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
-
 	try
 	{
 		inputPfoCollection = pLCEvent->getCollection(m_inputPfoCollection);
@@ -378,13 +373,58 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 		streamlog_out(DEBUG4) << "	Total Number of PFOs: " << n_PFO << std::endl;
 		for (int i_pfo = 0; i_pfo < n_PFO ; ++i_pfo)
 		{
+			streamlog_out(DEBUG) << "	-------------------------------------------------------" << std::endl;
+			streamlog_out(DEBUG) << "	Processing PFO at index " << i_pfo << std::endl;
+			streamlog_out(DEBUG) << "" << std::endl;
 			ReconstructedParticle* inputPFO = dynamic_cast<ReconstructedParticle*>( inputPfoCollection->getElementAt( i_pfo ) );
 			ReconstructedParticleImpl* outputPFO = new ReconstructedParticleImpl;
+			int linkedMCP_PDGCode = 0;
 			bool m_updatePFO = true;
+			TLorentzVector mcpFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
+			std::vector<float> PFOResidual( 3 , 0.0 );
+			std::vector<float> PFOCovMatPolar( 10 , 0.0 );
+			std::vector<float> PFOCoordinateError( 6 , 0.0 );
 			if ( ( inputPFO->getTracks() ).size() !=0 )
 			{
-				streamlog_out(DEBUG) << "	PFO has one (or more) track(s), Track parameters are used for PFO CovMat. nothing to do!" << std::endl;
+				streamlog_out(DEBUG) << "	PFO has one (or more) track(s), Track parameters are used for PFO CovMat. nothing to do/update!" << std::endl;
 				m_updatePFO = false;
+				outputPFO->setType(inputPFO->getType());
+				outputPFO->setMomentum( inputPFO->getMomentum() );
+				outputPFO->setEnergy( inputPFO->getEnergy() );
+				outputPFO->setMass( inputPFO->getMass() );
+				outputPFO->setCovMatrix(inputPFO->getCovMatrix());
+				outputPFO->setCharge(inputPFO->getCharge());
+				outputPFO->setReferencePoint(inputPFO->getReferencePoint());
+				for (unsigned int j=0; j<inputPFO->getParticleIDs().size(); ++j)
+				{
+					ParticleIDImpl* inPID = dynamic_cast<ParticleIDImpl*>(inputPFO->getParticleIDs()[j]);
+				        ParticleIDImpl* outPID = new ParticleIDImpl;
+				        outPID->setType(inPID->getType());
+				        outPID->setPDG(inPID->getPDG());
+				        outPID->setLikelihood(inPID->getLikelihood());
+				        outPID->setAlgorithmType(inPID->getAlgorithmType()) ;
+				        for (unsigned int k=0; k<inPID->getParameters().size()  ; ++k) outPID->addParameter(inPID->getParameters()[k]) ;
+				        outputPFO->addParticleID(outPID);
+				}
+				outputPFO->setParticleIDUsed(inputPFO->getParticleIDUsed());
+				outputPFO->setGoodnessOfPID(inputPFO->getGoodnessOfPID());
+				for (unsigned int j=0; j<inputPFO->getParticles().size(); ++j)
+				{
+					outputPFO->addParticle(inputPFO->getParticles()[j]);
+				}
+				for (unsigned int j=0; j<inputPFO->getClusters().size(); ++j)
+				{
+					outputPFO->addCluster(inputPFO->getClusters()[j]);
+				}
+				for (unsigned int j=0; j<inputPFO->getTracks().size(); ++j)
+				{
+					outputPFO->addTrack(inputPFO->getTracks()[j]);
+				}
+				outputPFO->setStartVertex(inputPFO->getStartVertex());
+			}
+			else
+			{
+				mcpFourMomentum = this->getLinkedMCP( pLCEvent , inputPFO, linkedMCP_PDGCode );
 			}
 		}
 		streamlog_out(DEBUG) << "Investigated All PFOs" << std::endl;
@@ -851,11 +891,10 @@ std::vector<float> AddNeutralPFOCovMat::getPFOCovMatPolarCoordinate( TLorentzVec
 
 }
 
-TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int nTrackspfo , int nClusterspfo )
+TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode )
 {
 	LCRelationNavigator navClusterMCTruth(pLCEvent->getCollection(m_ClusterMCTruthLinkCollection));
 	LCRelationNavigator navMCTruthCluster(pLCEvent->getCollection(m_MCTruthClusterLinkCollection));
-	streamlog_out(DEBUG) << "PFO has " << nTrackspfo << " tracks and " << nClusterspfo << " clusters" << std::endl;
 
 	int NeutralsPDGCode[14]{11,13,22,130,211,310,321,2112,2212,3112,3122,3222,3312,3322};
 //	int ChargedPDGCode[14]{11,13,22,211,321,2212,3112,3122,3222,3312,3322};
@@ -867,24 +906,24 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 	double maxweightPFOtoMCP = 0.0;
 	int iPFOtoMCPmax = -1;
 	int iMCPtoPFOmax = -1;
-	streamlog_out(DEBUG) << "PFO is neutral (without track), pfoType: " << inputPFO->getType() << " , looking for linked " << mcpvec.size() << " MCPs" << std::endl;
+	streamlog_out(DEBUG) << "	PFO is neutral (without track), pfoType: " << inputPFO->getType() << " , looking for linked " << mcpvec.size() << " MCPs" << std::endl;
 	for ( unsigned int i_mcp = 0; i_mcp < mcpvec.size(); i_mcp++ )
 	{
 		double mcp_weight = mcpweightvec.at(i_mcp);
 		MCParticle *testMCP = (MCParticle *) mcpvec.at(i_mcp);
-		streamlog_out(DEBUG) << "checking linked MCP at " << i_mcp << " , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
+		streamlog_out(DEBUG) << "	checking linked MCP at " << i_mcp << " , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
 		if ( mcp_weight > maxweightPFOtoMCP && mcp_weight >= 0.9 )
 		{
 			maxweightPFOtoMCP = mcp_weight;
 			iPFOtoMCPmax = i_mcp;
-			streamlog_out(DEBUG) << "linkedMCP: " << i_mcp << " has PDG: " << testMCP->getPDG() << " and PFO to MCP Link has weight = " << mcp_weight << std::endl;
+			streamlog_out(DEBUG) << "	linkedMCP: " << i_mcp << " has PDG: " << testMCP->getPDG() << " and PFO to MCP Link has weight = " << mcp_weight << std::endl;
 		}
 	}
 	if ( iPFOtoMCPmax != -1 )
 	{
 		h_NeutPFO_Weight->Fill( maxweightPFOtoMCP );
 		linkedMCP = (MCParticle *) mcpvec.at(iPFOtoMCPmax);
-		streamlog_out(DEBUG) << "Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << std::endl;
+		streamlog_out(DEBUG) << "	Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << std::endl;
 		Cluster *testCluster;
 		const EVENT::LCObjectVec& clustervec = navMCTruthCluster.getRelatedToObjects(linkedMCP);
 		const EVENT::FloatVec&  clusterweightvec = navMCTruthCluster.getRelatedToWeights(linkedMCP);
@@ -902,8 +941,9 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 		if ( iMCPtoPFOmax != -1 && testCluster == inputPFO->getClusters()[0] )
 		{
 			PFOlinkedtoMCP = true;
+			linkedMCP_PDGCode = linkedMCP->getPDG();
 			h_NeutPFO_PDG->Fill( linkedMCP->getPDG() );
-			if ( inputPFO->getType() != 22 ) streamlog_out(DEBUG) << "Initial PFO type: " << inputPFO->getType() << "	, linked MCP PDG(weight): " << linkedMCP->getPDG() << " (" << maxweightPFOtoMCP << ")	, linked-back PFO type(weight): " << inputPFO->getType() << " (" << maxweightMCPtoPFO << ")" << std::endl;
+			if ( inputPFO->getType() != 22 ) streamlog_out(DEBUG) << "	Initial PFO type: " << inputPFO->getType() << "	, linked MCP PDG(weight): " << linkedMCP->getPDG() << " (" << maxweightPFOtoMCP << ")	, linked-back PFO type(weight): " << inputPFO->getType() << " (" << maxweightMCPtoPFO << ")" << std::endl;
 			bool KnownPFO = false;
 			for ( int l = 0 ; l < 14 ; ++l)
 			{
