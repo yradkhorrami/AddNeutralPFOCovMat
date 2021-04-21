@@ -129,6 +129,18 @@ h_NHEnergy(NULL)
 					bool(false)
 				);
 
+	registerProcessorParameter(	"MinWeightClusterMCTruthLink" ,
+					"Minimum acceptable weight for Cluster -> MCParticle Link"  ,
+					m_MinWeightClusterMCTruthLink ,
+					float(0.9f)
+				);
+
+	registerProcessorParameter(	"MinWeightMCTruthClusterLink" ,
+					"Minimum acceptable weight for MCParticle -> Cluster Link"  ,
+					m_MinWeightMCTruthClusterLink ,
+					float(0.9f)
+				);
+
 	registerProcessorParameter(	"fillRootTree",
 					"whether store output comparison in RootTree or not",
 					m_fillRootTree,
@@ -379,7 +391,11 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			ReconstructedParticle* inputPFO = dynamic_cast<ReconstructedParticle*>( inputPfoCollection->getElementAt( i_pfo ) );
 			ReconstructedParticleImpl* outputPFO = new ReconstructedParticleImpl;
 			int linkedMCP_PDGCode = 0;
+			float weightClusterMCP = 0.0;
+			float weightMCPCluster = 0.0;
 			bool m_updatePFO = true;
+			float pfoMass = inputPFO->getMass();
+			TVector3 clusterPosition(0.,0.,0.);
 			TLorentzVector mcpFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
 			std::vector<float> PFOResidual( 3 , 0.0 );
 			std::vector<float> PFOCovMatPolar( 10 , 0.0 );
@@ -424,7 +440,40 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			}
 			else
 			{
-				mcpFourMomentum = this->getLinkedMCP( pLCEvent , inputPFO, linkedMCP_PDGCode );
+				mcpFourMomentum = this->getLinkedMCP( pLCEvent , inputPFO, linkedMCP_PDGCode , weightClusterMCP , weightMCPCluster );
+				streamlog_out(DEBUG) << "	PDG code of linked MCParticle is: " << linkedMCP_PDGCode << "( " << weightClusterMCP << " , " << weightMCPCluster << " )" << std::endl;
+				if ( !m_AssumeNeutralPFOMassive ) pfoMass = 0.0;
+				float clusterEnergy	= ( inputPFO->getClusters()[0] )->getEnergy();
+				float clusterX		= ( inputPFO->getClusters()[0] )->getPosition()[0];
+				float clusterY		= ( inputPFO->getClusters()[0] )->getPosition()[1];
+				float clusterZ		= ( inputPFO->getClusters()[0] )->getPosition()[2];
+				clusterPosition	= TVector3( clusterX , clusterY , clusterZ );
+				float clusterDistance	= sqrt( pow( clusterX , 2 ) + pow( clusterY , 2 ) + pow( clusterZ , 2 ) );
+				float pfoMomentumMag	= 0;
+				float pfoEnergy	= inputPFO->getEnergy();
+				float pfoE;
+				pfoMomentumMag = ( m_isClusterEnergyKinEnergy ? sqrt( pow( pfoEnergy , 2 ) + 2 * pfoMass * pfoEnergy ) : pfoEnergy );
+				float pfoPx;
+				float pfoPy;
+				float pfoPz;
+				if ( m_updatePFO4Momentum )
+				{
+					pfoPx	= pfoMomentumMag * clusterX / clusterDistance;
+					pfoPy	= pfoMomentumMag * clusterY / clusterDistance;
+					pfoPz	= pfoMomentumMag * clusterZ / clusterDistance;
+					pfoE = ( m_isClusterEnergyKinEnergy ? pfoEnergy + pfoMass : sqrt( pow( pfoMomentumMag , 2 ) + pow( pfoMass , 2 ) ) );
+				}
+				else
+				{
+					pfoPx	= inputPFO->getMomentum()[ 0 ];
+					pfoPy	= inputPFO->getMomentum()[ 1 ];
+					pfoPz	= inputPFO->getMomentum()[ 2 ];
+					pfoE	= inputPFO->getEnergy();
+				}
+				std::vector<float> clusterPositionError = ( inputPFO->getClusters()[0] )->getPositionError();
+				float clusterEnergyError= ( inputPFO->getClusters()[0] )->getEnergyError();
+				streamlog_out(DEBUG) << "	Cluster Energy / PFO Energy = " << clusterEnergy << " / " << pfoE << std::endl;
+				h_clusterE_pfoE->Fill( clusterEnergy , pfoE );
 			}
 			outputPfoCollection->addElement( outputPFO );
 		}
@@ -892,7 +941,7 @@ std::vector<float> AddNeutralPFOCovMat::getPFOCovMatPolarCoordinate( TLorentzVec
 
 }
 
-TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode )
+TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode , float &weightClusterMCP , float &weightMCPCluster )
 {
 	LCRelationNavigator navClusterMCTruth(pLCEvent->getCollection(m_ClusterMCTruthLinkCollection));
 	LCRelationNavigator navMCTruthCluster(pLCEvent->getCollection(m_MCTruthClusterLinkCollection));
@@ -912,71 +961,77 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 	{
 		double mcp_weight = mcpweightvec.at(i_mcp);
 		MCParticle *testMCP = (MCParticle *) mcpvec.at(i_mcp);
-		streamlog_out(DEBUG) << "	checking linked MCP at " << i_mcp << " , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
-		if ( mcp_weight > maxweightPFOtoMCP && mcp_weight >= 0.9 )
+		streamlog_out(DEBUG) << "	Checking MCP[ " << i_mcp << " ] , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
+		if ( mcp_weight > maxweightPFOtoMCP )// && mcp_weight >= 0.9 )
 		{
 			maxweightPFOtoMCP = mcp_weight;
 			iPFOtoMCPmax = i_mcp;
-			streamlog_out(DEBUG) << "	linkedMCP: " << i_mcp << " has PDG: " << testMCP->getPDG() << " and PFO to MCP Link has weight = " << mcp_weight << std::endl;
 		}
 	}
+	weightClusterMCP = maxweightPFOtoMCP;
 	if ( iPFOtoMCPmax != -1 )
 	{
 		h_NeutPFO_Weight->Fill( maxweightPFOtoMCP );
-		linkedMCP = (MCParticle *) mcpvec.at(iPFOtoMCPmax);
-		streamlog_out(DEBUG) << "	Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << std::endl;
-		Cluster *testCluster;
+		linkedMCP = (MCParticle *) mcpvec.at( iPFOtoMCPmax );
+		Cluster *linkedCluster;
 		const EVENT::LCObjectVec& clustervec = navMCTruthCluster.getRelatedToObjects(linkedMCP);
 		const EVENT::FloatVec&  clusterweightvec = navMCTruthCluster.getRelatedToWeights(linkedMCP);
+		streamlog_out(DEBUG) << "	Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << " , looking for " << clustervec.size() << " Cluster(s) linked back to this MCParticle" << std::endl;
 		double maxweightMCPtoPFO = 0.;
 		for ( unsigned int i_cluster = 0; i_cluster < clustervec.size(); i_cluster++ )
 		{
 			double cluster_weight = clusterweightvec.at(i_cluster);
-			testCluster = (Cluster *) clustervec.at(i_cluster);
-			if ( cluster_weight > maxweightMCPtoPFO && cluster_weight >= 0.9 )
+			streamlog_out(DEBUG) << "	Checking cluster[ " << i_cluster << " ] , link weight = " << cluster_weight << std::endl;
+			if ( cluster_weight > maxweightMCPtoPFO )// && cluster_weight >= 0.9 )
 			{
 				maxweightMCPtoPFO = cluster_weight;
 				iMCPtoPFOmax = i_cluster;
 			}
 		}
-		if ( iMCPtoPFOmax != -1 && testCluster == inputPFO->getClusters()[0] )
+		weightMCPCluster = maxweightMCPtoPFO;
+		if ( iMCPtoPFOmax != -1 )
 		{
-			PFOlinkedtoMCP = true;
-			linkedMCP_PDGCode = linkedMCP->getPDG();
-			h_NeutPFO_PDG->Fill( linkedMCP->getPDG() );
-			if ( inputPFO->getType() != 22 ) streamlog_out(DEBUG) << "	Initial PFO type: " << inputPFO->getType() << "	, linked MCP PDG(weight): " << linkedMCP->getPDG() << " (" << maxweightPFOtoMCP << ")	, linked-back PFO type(weight): " << inputPFO->getType() << " (" << maxweightMCPtoPFO << ")" << std::endl;
-			bool KnownPFO = false;
-			for ( int l = 0 ; l < 14 ; ++l)
+			linkedCluster = (Cluster *) clustervec.at( iMCPtoPFOmax );
+			if ( linkedCluster == inputPFO->getClusters()[0] )
 			{
-				if ( abs( linkedMCP->getPDG() ) == NeutralsPDGCode[ l ] )
+				streamlog_out(DEBUG) << "	Found a MCParticle (PDGCode: " << linkedMCP->getPDG() << ") 	linked to cluster of PFO (TYPE: " << inputPFO->getType() << ")" << std::endl;
+				streamlog_out(DEBUG) << "	Cluster_MCParticle link weight = " << maxweightPFOtoMCP << " 	; 	MCParticle_Cluster link weight = " << maxweightMCPtoPFO << std::endl;
+				PFOlinkedtoMCP = true;
+				linkedMCP_PDGCode = linkedMCP->getPDG();
+				h_NeutPFO_PDG->Fill( linkedMCP->getPDG() );
+				bool KnownPFO = false;
+				for ( int l = 0 ; l < 14 ; ++l)
 				{
-					h_NeutPFO_TYPE->Fill( l );
-					KnownPFO = true;
+					if ( abs( linkedMCP->getPDG() ) == NeutralsPDGCode[ l ] )
+					{
+						h_NeutPFO_TYPE->Fill( l );
+						KnownPFO = true;
+						if ( inputPFO->getType() == 22 )
+						{
+							h_NeutPFO_IDasPhoton->Fill( l );
+						}
+						else
+						{
+							h_NeutPFO_IDasOther->Fill( l );
+						}
+					}
+				}
+				if ( !KnownPFO )
+				{
+					h_NeutPFO_TYPE->Fill( 14 );
 					if ( inputPFO->getType() == 22 )
 					{
-						h_NeutPFO_IDasPhoton->Fill( l );
+						h_NeutPFO_IDasPhoton->Fill( 14 );
 					}
 					else
 					{
-						h_NeutPFO_IDasOther->Fill( l );
+						h_NeutPFO_IDasOther->Fill( 14 );
 					}
 				}
+				mcpFourMomentum = TLorentzVector( linkedMCP->getMomentum()[0] , linkedMCP->getMomentum()[1] , linkedMCP->getMomentum()[2] , linkedMCP->getEnergy() );
+				h_NHEnergy->Fill( mcpFourMomentum.E() , inputPFO->getEnergy() );
+				h_NH_EclusterPlusMass_Emcp->Fill( mcpFourMomentum.E() , ( inputPFO->getClusters()[0] )->getEnergy() + inputPFO->getMass() );
 			}
-			if ( !KnownPFO )
-			{
-				h_NeutPFO_TYPE->Fill( 14 );
-				if ( inputPFO->getType() == 22 )
-				{
-					h_NeutPFO_IDasPhoton->Fill( 14 );
-				}
-				else
-				{
-					h_NeutPFO_IDasOther->Fill( 14 );
-				}
-			}
-			mcpFourMomentum = TLorentzVector( linkedMCP->getMomentum()[0] , linkedMCP->getMomentum()[1] , linkedMCP->getMomentum()[2] , linkedMCP->getEnergy() );
-			h_NHEnergy->Fill( mcpFourMomentum.E() , inputPFO->getEnergy() );
-			h_NH_EclusterPlusMass_Emcp->Fill( mcpFourMomentum.E() , ( inputPFO->getClusters()[0] )->getEnergy() + inputPFO->getMass() );
 		}
 	}
 	if ( PFOlinkedtoMCP )

@@ -49,7 +49,7 @@ class AddNeutralPFOCovMat : public Processor
 		std::vector<float> getClusterDirectionError( TVector3 clusterPosition , std::vector<float> clusterPositionError );
 		std::vector<float> getPFOResidual( TLorentzVector pfoFourMomentum , TLorentzVector mcpFourMomentum );
 		std::vector<float> getPFOCovMatPolarCoordinate( TLorentzVector pfoFourMomentum , std::vector<float> pfoCovMat );
-		TLorentzVector getLinkedMCP( EVENT::LCEvent *pLCEvent , EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode );
+		TLorentzVector getLinkedMCP( EVENT::LCEvent *pLCEvent , EVENT::ReconstructedParticle* inputPFO , int &linkedMCP_PDGCode , float &weightClusterMCP , float &weightMCPCluster );
 		virtual void check( EVENT::LCEvent *pLCEvent );
 		virtual void end();
 
@@ -65,6 +65,8 @@ class AddNeutralPFOCovMat : public Processor
 		bool					m_updatePFO4Momentum = false;
 		bool					m_useTrueJacobian = false;
 		bool					m_fillRootTree = false;
+		float					m_MinWeightClusterMCTruthLink;
+		float					m_MinWeightMCTruthClusterLink;
 		int					m_nRun;
 		int					m_nEvt;
 		int					m_nRunSum;
