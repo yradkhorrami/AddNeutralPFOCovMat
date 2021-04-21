@@ -398,6 +398,7 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			TVector3 clusterPosition( 0.0 , 0.0 , 0.0 );
 			TLorentzVector mcpFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
 			TLorentzVector pfoFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
+			double outputPFOMomentum[3]{0., 0., 0.};
 			std::vector<float> outputCovMatrix( 10 , 0.0 );
 			std::vector<float> PFOResidual( 3 , 0.0 );
 			std::vector<float> PFOCovMatPolar( 10 , 0.0 );
@@ -482,6 +483,44 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 				m_RecoTheta.push_back( pfoFourMomentum.Theta() );
 				m_RecoPhi.push_back( pfoFourMomentum.Phi() );
 				outputCovMatrix	= this->UpdateNeutralPFOCovMat( clusterPosition , pfoEnergy , pfoMass , clusterPositionError , clusterEnergyError );
+				outputPFOMomentum[ 0 ] = pfoFourMomentum.Px();
+				outputPFOMomentum[ 1 ] = pfoFourMomentum.Py();
+				outputPFOMomentum[ 2 ] = pfoFourMomentum.Pz();
+				pfoE = pfoFourMomentum.E();
+
+				outputPFO->setType(inputPFO->getType());
+				outputPFO->setMomentum( outputPFOMomentum );
+				outputPFO->setEnergy( pfoE );
+				outputPFO->setMass( inputPFO->getMass() );
+				outputPFO->setCovMatrix( outputCovMatrix );
+				outputPFO->setCharge(inputPFO->getCharge());
+				outputPFO->setReferencePoint(inputPFO->getReferencePoint());
+				for (unsigned int j=0; j<inputPFO->getParticleIDs().size(); ++j)
+				{
+					ParticleIDImpl* inPID = dynamic_cast<ParticleIDImpl*>(inputPFO->getParticleIDs()[j]);
+				        ParticleIDImpl* outPID = new ParticleIDImpl;
+				        outPID->setType(inPID->getType());
+				        outPID->setPDG(inPID->getPDG());
+				        outPID->setLikelihood(inPID->getLikelihood());
+				        outPID->setAlgorithmType(inPID->getAlgorithmType()) ;
+				        for (unsigned int k=0; k<inPID->getParameters().size()  ; ++k) outPID->addParameter(inPID->getParameters()[k]) ;
+				        outputPFO->addParticleID(outPID);
+				}
+				outputPFO->setParticleIDUsed(inputPFO->getParticleIDUsed());
+				outputPFO->setGoodnessOfPID(inputPFO->getGoodnessOfPID());
+				for (unsigned int j=0; j<inputPFO->getParticles().size(); ++j)
+				{
+					outputPFO->addParticle(inputPFO->getParticles()[j]);
+				}
+				for (unsigned int j=0; j<inputPFO->getClusters().size(); ++j)
+				{
+					outputPFO->addCluster(inputPFO->getClusters()[j]);
+				}
+				for (unsigned int j=0; j<inputPFO->getTracks().size(); ++j)
+				{
+					outputPFO->addTrack(inputPFO->getTracks()[j]);
+				}
+				outputPFO->setStartVertex(inputPFO->getStartVertex());
 			}
 			outputPfoCollection->addElement( outputPFO );
 		}
