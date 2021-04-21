@@ -64,7 +64,7 @@ class AddNeutralPFOCovMat : public Processor
 		bool					m_isClusterEnergyKinEnergy = false;
 		bool					m_updatePFO4Momentum = false;
 		bool					m_useTrueJacobian = false;
-		bool					m_storeRootTree = false;
+		bool					m_fillRootTree = false;
 		int					m_nRun;
 		int					m_nEvt;
 		int					m_nRunSum;

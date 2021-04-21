@@ -129,9 +129,9 @@ h_NHEnergy(NULL)
 					bool(false)
 				);
 
-	registerProcessorParameter(	"storeRootTree",
+	registerProcessorParameter(	"fillRootTree",
 					"whether store output comparison in RootTree or not",
-					m_storeRootTree,
+					m_fillRootTree,
 					bool(false)
 				);
 
@@ -354,17 +354,35 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 	m_nRun = pLCEvent->getRunNumber();
 	m_nEvt = pLCEvent->getEventNumber();
 	++m_nEvtSum;
-	streamlog_out(MESSAGE) << "processed event 	" << m_nEvtSum << std::endl;
 
 	LCCollection *inputPfoCollection{};
+	LCCollectionVec *outputPfoCollection{};
+	int n_PFO = -1;
 	this->Clear();
+	streamlog_out(MESSAGE) << "" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////	Processing event 	" << m_nEvt << "	////////////////////" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
+
+	streamlog_out(MESSAGE) << "" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////	Processing event 	" << m_nEvt << "	////////////////////" << std::endl;
+	streamlog_out(MESSAGE) << "	////////////////////////////////////////////////////////////////////////////" << std::endl;
 
 	try
 	{
 		inputPfoCollection = pLCEvent->getCollection(m_inputPfoCollection);
-		int n_PFO = inputPfoCollection->getNumberOfElements();
-		LCCollectionVec *m_col_outputPfo = new LCCollectionVec(LCIO::RECONSTRUCTEDPARTICLE);
-
+		outputPfoCollection = new LCCollectionVec(LCIO::RECONSTRUCTEDPARTICLE);
+		n_PFO = inputPfoCollection->getNumberOfElements();
+		if ( n_PFO == -1 ) streamlog_out(DEBUG4) << "	Input PFO collection (" << m_inputPfoCollection << ") has no element (PFO) " << std::endl;
+		streamlog_out(DEBUG4) << "	Total Number of PFOs: " << n_PFO << std::endl;
+		for (int i_pfo = 0; i_pfo < n_PFO ; ++i_pfo)
+		{
+			ReconstructedParticle* inputPFO = dynamic_cast<ReconstructedParticle*>( inputPfoCollection->getElementAt( i_pfo ) );
+			ReconstructedParticleImpl* outputPFO = new ReconstructedParticleImpl;
+			bool m_updatePFO = true;
+			if ( ( inputPFO->getTracks() ).size() !=0 ) m_updatePFO = false;
+		}
 		streamlog_out(DEBUG) << "Investigated All PFOs" << std::endl;
 		m_pTTree->Fill();
 	}
