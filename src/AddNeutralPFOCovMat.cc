@@ -381,13 +381,13 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 		inputPfoCollection = pLCEvent->getCollection(m_inputPfoCollection);
 		outputPfoCollection = new LCCollectionVec(LCIO::RECONSTRUCTEDPARTICLE);
 		n_PFO = inputPfoCollection->getNumberOfElements();
-		if ( n_PFO == -1 ) streamlog_out(DEBUG4) << "	Input PFO collection (" << m_inputPfoCollection << ") has no element (PFO) " << std::endl;
-		streamlog_out(DEBUG4) << "	Total Number of PFOs: " << n_PFO << std::endl;
+		if ( n_PFO == -1 ) streamlog_out(DEBUG7) << "	Input PFO collection (" << m_inputPfoCollection << ") has no element (PFO) " << std::endl;
+		streamlog_out(DEBUG7) << "	Total Number of PFOs: " << n_PFO << std::endl;
 		for (int i_pfo = 0; i_pfo < n_PFO ; ++i_pfo)
 		{
-			streamlog_out(DEBUG) << "	-------------------------------------------------------" << std::endl;
-			streamlog_out(DEBUG) << "	Processing PFO at index " << i_pfo << std::endl;
-			streamlog_out(DEBUG) << "" << std::endl;
+			streamlog_out(DEBUG6) << "	-------------------------------------------------------" << std::endl;
+			streamlog_out(DEBUG6) << "	Processing PFO at index " << i_pfo << std::endl;
+			streamlog_out(DEBUG6) << "" << std::endl;
 			ReconstructedParticle* inputPFO = dynamic_cast<ReconstructedParticle*>( inputPfoCollection->getElementAt( i_pfo ) );
 			ReconstructedParticleImpl* outputPFO = new ReconstructedParticleImpl;
 			int linkedMCP_PDGCode = 0;
@@ -395,8 +395,10 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			float weightMCPCluster = 0.0;
 			bool m_updatePFO = true;
 			float pfoMass = inputPFO->getMass();
-			TVector3 clusterPosition(0.,0.,0.);
+			TVector3 clusterPosition( 0.0 , 0.0 , 0.0 );
 			TLorentzVector mcpFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
+			TLorentzVector pfoFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
+			std::vector<float> outputCovMatrix( 10 , 0.0 );
 			std::vector<float> PFOResidual( 3 , 0.0 );
 			std::vector<float> PFOCovMatPolar( 10 , 0.0 );
 			std::vector<float> PFOCoordinateError( 6 , 0.0 );
@@ -441,7 +443,7 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			else
 			{
 				mcpFourMomentum = this->getLinkedMCP( pLCEvent , inputPFO, linkedMCP_PDGCode , weightClusterMCP , weightMCPCluster );
-				streamlog_out(DEBUG) << "	PDG code of linked MCParticle is: " << linkedMCP_PDGCode << "( " << weightClusterMCP << " , " << weightMCPCluster << " )" << std::endl;
+				streamlog_out(DEBUG2) << "	PDG code of linked MCParticle is: " << linkedMCP_PDGCode << "( " << weightClusterMCP << " , " << weightMCPCluster << " )" << std::endl;
 				if ( !m_AssumeNeutralPFOMassive ) pfoMass = 0.0;
 				float clusterEnergy	= ( inputPFO->getClusters()[0] )->getEnergy();
 				float clusterX		= ( inputPFO->getClusters()[0] )->getPosition()[0];
@@ -471,9 +473,15 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 					pfoE	= inputPFO->getEnergy();
 				}
 				std::vector<float> clusterPositionError = ( inputPFO->getClusters()[0] )->getPositionError();
-				float clusterEnergyError= ( inputPFO->getClusters()[0] )->getEnergyError();
-				streamlog_out(DEBUG) << "	Cluster Energy / PFO Energy = " << clusterEnergy << " / " << pfoE << std::endl;
+				float clusterEnergyError = ( inputPFO->getClusters()[0] )->getEnergyError();
+				streamlog_out(DEBUG2) << "	Cluster Energy / PFO Energy = " << clusterEnergy << " / " << pfoE << std::endl;
 				h_clusterE_pfoE->Fill( clusterEnergy , pfoE );
+				TVector3 pfoMomentum( pfoPx , pfoPy , pfoPz );
+				pfoFourMomentum	= TLorentzVector( pfoMomentum , pfoE );
+				m_RecoEnergy.push_back( pfoFourMomentum.E() );
+				m_RecoTheta.push_back( pfoFourMomentum.Theta() );
+				m_RecoPhi.push_back( pfoFourMomentum.Phi() );
+				outputCovMatrix	= this->UpdateNeutralPFOCovMat( clusterPosition , pfoEnergy , pfoMass , clusterPositionError , clusterEnergyError );
 			}
 			outputPfoCollection->addElement( outputPFO );
 		}
@@ -491,8 +499,8 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 {
 
 //	Obtain covariance matrix on (px,py,pz,E) from the
-//	covariance matrix on cluster parameters (px,py,pz,Ek=Ec=E-E0).
-//	=> E = Ek + m	;	|p| = sqrt( Ek^2 + 2mEk )
+//	covariance matrix on cluster parameters (px,py,pz,|p|=Ec).
+//	=> E^2 = Ec^2 + m^2	;	|p| = Ec
 //	define the jacobian as the 4x4 matrix:
 //
 //
@@ -503,7 +511,7 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 //	J =
 //			Dpx/Dz			Dpy/Dz			Dpz/Dz			DE/Dz
 //
-//			Dpx/DEk			Dpy/DEk			Dpz/DEk			DE/DEk
+//			Dpx/DEc			Dpy/DEc			Dpz/DEc			DE/DEc
 //
 //
 //
@@ -559,23 +567,11 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 	float SigmaZ2		=	clusterPositionError[ 5 ];
 	float SigmaE2		=	pow( clusterEnergyError , 2 );
 
-	float pfoP;
-	float pfoE;
-	float derivative_coeff	= 1.0;
-	if ( m_isClusterEnergyKinEnergy )
-	{
-		pfoP			= sqrt( pow( pfoEc , 2 ) + 2 * pfoMass * pfoEc );
-		pfoE			= sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) );
-//		derivative_coeff	= 1.;
-	}
-	else
-	{
-		pfoP			= pfoEc;
-		pfoE			= sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) );
-		if ( m_useTrueJacobian ) derivative_coeff	= pfoP / pfoE;
-	}
+	float pfoP = ( m_isClusterEnergyKinEnergy ? sqrt( pow( pfoEc , 2 ) + 2 * pfoMass * pfoEc ) : pfoEc );
+	float pfoE = ( m_isClusterEnergyKinEnergy ? sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) ) : sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) ) );
+	float derivative_coeff	= ( ( m_useTrueJacobian && !m_isClusterEnergyKinEnergy ) ? pfoP / pfoE : 1.0 );
 
-	streamlog_out(DEBUG) << "Cluster information obtained" << std::endl;
+	streamlog_out(DEBUG0) << "	Cluster information obtained" << std::endl;
 
 //	Define array with jacobian matrix elements by rows
 	double jacobian_by_rows[rows*columns] =
@@ -585,22 +581,10 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 		-pfoP * pfoZ * pfoX / pfoR3				,	-pfoP * pfoZ * pfoY / pfoR3				,	pfoP * ( pfoR2 - pfoZ2 ) / pfoR3			,	0			,
 		derivative_coeff * pfoE * pfoX / ( pfoP * pfoR )	,	derivative_coeff * pfoE * pfoY / ( pfoP * pfoR )	,	derivative_coeff * pfoE * pfoZ / ( pfoP * pfoR )	,	derivative_coeff
 	};
-/*
-	streamlog_out(MESSAGE) << "******************************************************************************************" << std::endl;
-	streamlog_out(DEBUG) << "Jacobian array formed by rows" << std::endl;
-	streamlog_out(MESSAGE) << "Jacobain CovMat(x,y,z,E) -> CovMat (Px,Py,Pz,E):" << std::endl;
-	streamlog_out(MESSAGE) << "{" << std::endl;
-	streamlog_out(MESSAGE) << "	" << jacobian_by_rows[ 0 ] << "	,	" << jacobian_by_rows[ 1 ] << "	,	" << jacobian_by_rows[ 2 ] << "	,	" << jacobian_by_rows[ 3 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << jacobian_by_rows[ 4 ] << "	,	" << jacobian_by_rows[ 5 ] << "	,	" << jacobian_by_rows[ 6 ] << "	,	" << jacobian_by_rows[ 7 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << jacobian_by_rows[ 8 ] << "	,	" << jacobian_by_rows[ 9 ] << "	,	" << jacobian_by_rows[ 10 ] << "	,	" << jacobian_by_rows[ 11 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << jacobian_by_rows[ 12 ] << "	,	" << jacobian_by_rows[ 13 ] << "	,	" << jacobian_by_rows[ 14 ] << "	,	" << jacobian_by_rows[ 15 ] << std::endl;
-	streamlog_out(MESSAGE) << "}" << std::endl;
-	streamlog_out(MESSAGE) << "******************************************************************************************" << std::endl;
-*/
 
 //	construct the Jacobian using previous array ("F" if filling by columns, "C" if filling by rows, $ROOTSYS/math/matrix/src/TMatrixT.cxx)
 	TMatrixD jacobian(rows,columns, jacobian_by_rows, "C");
-	streamlog_out(DEBUG) << "Jacobian array converted to Jacobian matrix" << std::endl;
+	streamlog_out(DEBUG0) << "	Jacobian array converted to Jacobian matrix" << std::endl;
 
 //	cluster covariance matrix by rows
 	double cluster_cov_matrix_by_rows[rows*rows] =
@@ -610,36 +594,16 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 				SigmaXZ		,	SigmaYZ		,	SigmaZ2		,	0	,
 				0		,	0		,	0		,	SigmaE2
 			};
-/*
-	streamlog_out(DEBUG) << "cluster covariance matrix array formed by rows" << std::endl;
-	streamlog_out(MESSAGE) << "CovMat(x,y,z,E):" << std::endl;
-	streamlog_out(MESSAGE) << "{" << std::endl;
-	streamlog_out(MESSAGE) << "	" << cluster_cov_matrix_by_rows[ 0 ] << "	,	" << cluster_cov_matrix_by_rows[ 1 ] << "	,	" << cluster_cov_matrix_by_rows[ 2 ] << "	,	" << cluster_cov_matrix_by_rows[ 3 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << cluster_cov_matrix_by_rows[ 4 ] << "	,	" << cluster_cov_matrix_by_rows[ 5 ] << "	,	" << cluster_cov_matrix_by_rows[ 6 ] << "	,	" << cluster_cov_matrix_by_rows[ 7 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << cluster_cov_matrix_by_rows[ 8 ] << "	,	" << cluster_cov_matrix_by_rows[ 9 ] << "	,	" << cluster_cov_matrix_by_rows[ 10 ] << "	,	" << cluster_cov_matrix_by_rows[ 11 ] << std::endl;
-	streamlog_out(MESSAGE) << "	" << cluster_cov_matrix_by_rows[ 12 ] << "	,	" << cluster_cov_matrix_by_rows[ 13 ] << "	,	" << cluster_cov_matrix_by_rows[ 14 ] << "	,	" << cluster_cov_matrix_by_rows[ 15 ] << std::endl;
-	streamlog_out(MESSAGE) << "}" << std::endl;
-	streamlog_out(MESSAGE) << "******************************************************************************************" << std::endl;
-*/
+
 	TMatrixD covMatrix_cluster(rows,rows, cluster_cov_matrix_by_rows, "C");
-	streamlog_out(DEBUG) << "cluster covariance matrix array converted to cluster covariance matrix" << std::endl;
+	streamlog_out(DEBUG0) << "	Cluster covariance matrix array converted to cluster covariance matrix" << std::endl;
 
 	covMatrixMomenta.Mult( TMatrixD( jacobian ,
 					TMatrixD::kTransposeMult ,
 					covMatrix_cluster) ,
 					jacobian
 					);
-/*
-	streamlog_out(DEBUG) << "cluster covariance matrix array converted to FourMomentumCovariance matrix" << std::endl;
-	streamlog_out(MESSAGE) << "CovMat(x,y,z,E):" << std::endl;
-	streamlog_out(MESSAGE) << "{" << std::endl;
-	streamlog_out(MESSAGE) << "	" << covMatrixMomenta(0,0) << "	,	" << covMatrixMomenta(0,1) << "	,	" << covMatrixMomenta(0,2) << "	,	" << covMatrixMomenta(0,3) << std::endl;
-	streamlog_out(MESSAGE) << "	" << covMatrixMomenta(1,0) << "	,	" << covMatrixMomenta(1,1) << "	,	" << covMatrixMomenta(1,2) << "	,	" << covMatrixMomenta(1,3) << std::endl;
-	streamlog_out(MESSAGE) << "	" << covMatrixMomenta(2,0) << "	,	" << covMatrixMomenta(2,1) << "	,	" << covMatrixMomenta(2,2) << "	,	" << covMatrixMomenta(2,3) << std::endl;
-	streamlog_out(MESSAGE) << "	" << covMatrixMomenta(3,0) << "	,	" << covMatrixMomenta(3,1) << "	,	" << covMatrixMomenta(3,2) << "	,	" << covMatrixMomenta(3,3) << std::endl;
-	streamlog_out(MESSAGE) << "}" << std::endl;
-	streamlog_out(MESSAGE) << "******************************************************************************************" << std::endl;
-*/
+
 	covP.push_back( covMatrixMomenta(0,0) ); // x-x
 	covP.push_back( covMatrixMomenta(1,0) ); // y-x
 	covP.push_back( covMatrixMomenta(1,1) ); // y-y
@@ -650,7 +614,7 @@ std::vector<float> AddNeutralPFOCovMat::UpdateNeutralPFOCovMat( TVector3 cluster
 	covP.push_back( covMatrixMomenta(3,1) ); // e-y
 	covP.push_back( covMatrixMomenta(3,2) ); // e-z
 	covP.push_back( covMatrixMomenta(3,3) ); // e-e
-	streamlog_out(DEBUG) << "FourMomentumCovarianceMatrix Filled succesfully" << std::endl;
+	streamlog_out(DEBUG0) << "	FourMomentumCovarianceMatrix Filled succesfully" << std::endl;
 
 	return covP;
 
@@ -956,12 +920,12 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 	double maxweightPFOtoMCP = 0.0;
 	int iPFOtoMCPmax = -1;
 	int iMCPtoPFOmax = -1;
-	streamlog_out(DEBUG) << "	PFO is neutral (without track), pfoType: " << inputPFO->getType() << " , looking for linked " << mcpvec.size() << " MCPs" << std::endl;
+	streamlog_out(DEBUG0) << "	PFO is neutral (without track), pfoType: " << inputPFO->getType() << " , looking for linked " << mcpvec.size() << " MCPs" << std::endl;
 	for ( unsigned int i_mcp = 0; i_mcp < mcpvec.size(); i_mcp++ )
 	{
 		double mcp_weight = mcpweightvec.at(i_mcp);
 		MCParticle *testMCP = (MCParticle *) mcpvec.at(i_mcp);
-		streamlog_out(DEBUG) << "	Checking MCP[ " << i_mcp << " ] , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
+		streamlog_out(DEBUG0) << "	Checking MCP[ " << i_mcp << " ] , MCP PDG = " << testMCP->getPDG() << " , link weight = " << mcp_weight << std::endl;
 		if ( mcp_weight > maxweightPFOtoMCP )// && mcp_weight >= 0.9 )
 		{
 			maxweightPFOtoMCP = mcp_weight;
@@ -976,12 +940,12 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 		Cluster *linkedCluster;
 		const EVENT::LCObjectVec& clustervec = navMCTruthCluster.getRelatedToObjects(linkedMCP);
 		const EVENT::FloatVec&  clusterweightvec = navMCTruthCluster.getRelatedToWeights(linkedMCP);
-		streamlog_out(DEBUG) << "	Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << " , looking for " << clustervec.size() << " Cluster(s) linked back to this MCParticle" << std::endl;
+		streamlog_out(DEBUG0) << "	Found linked MCP, MCP PDG: " << linkedMCP->getPDG() << " , link weight = " << maxweightPFOtoMCP << " , looking for " << clustervec.size() << " Cluster(s) linked back to this MCParticle" << std::endl;
 		double maxweightMCPtoPFO = 0.;
 		for ( unsigned int i_cluster = 0; i_cluster < clustervec.size(); i_cluster++ )
 		{
 			double cluster_weight = clusterweightvec.at(i_cluster);
-			streamlog_out(DEBUG) << "	Checking cluster[ " << i_cluster << " ] , link weight = " << cluster_weight << std::endl;
+			streamlog_out(DEBUG0) << "	Checking cluster[ " << i_cluster << " ] , link weight = " << cluster_weight << std::endl;
 			if ( cluster_weight > maxweightMCPtoPFO )// && cluster_weight >= 0.9 )
 			{
 				maxweightMCPtoPFO = cluster_weight;
@@ -994,8 +958,8 @@ TLorentzVector AddNeutralPFOCovMat::getLinkedMCP( EVENT::LCEvent *pLCEvent, EVEN
 			linkedCluster = (Cluster *) clustervec.at( iMCPtoPFOmax );
 			if ( linkedCluster == inputPFO->getClusters()[0] )
 			{
-				streamlog_out(DEBUG) << "	Found a MCParticle (PDGCode: " << linkedMCP->getPDG() << ") 	linked to cluster of PFO (TYPE: " << inputPFO->getType() << ")" << std::endl;
-				streamlog_out(DEBUG) << "	Cluster_MCParticle link weight = " << maxweightPFOtoMCP << " 	; 	MCParticle_Cluster link weight = " << maxweightMCPtoPFO << std::endl;
+				streamlog_out(DEBUG1) << "	Found a MCParticle (PDGCode: " << linkedMCP->getPDG() << ") 	linked to cluster of PFO (TYPE: " << inputPFO->getType() << ")" << std::endl;
+				streamlog_out(DEBUG1) << "	Cluster_MCParticle link weight = " << maxweightPFOtoMCP << " 	; 	MCParticle_Cluster link weight = " << maxweightMCPtoPFO << std::endl;
 				PFOlinkedtoMCP = true;
 				linkedMCP_PDGCode = linkedMCP->getPDG();
 				h_NeutPFO_PDG->Fill( linkedMCP->getPDG() );
