@@ -381,7 +381,11 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			ReconstructedParticle* inputPFO = dynamic_cast<ReconstructedParticle*>( inputPfoCollection->getElementAt( i_pfo ) );
 			ReconstructedParticleImpl* outputPFO = new ReconstructedParticleImpl;
 			bool m_updatePFO = true;
-			if ( ( inputPFO->getTracks() ).size() !=0 ) m_updatePFO = false;
+			if ( ( inputPFO->getTracks() ).size() !=0 )
+			{
+				streamlog_out(DEBUG) << "	PFO has one (or more) track(s), Track parameters are used for PFO CovMat. nothing to do!" << std::endl;
+				m_updatePFO = false;
+			}
 		}
 		streamlog_out(DEBUG) << "Investigated All PFOs" << std::endl;
 		m_pTTree->Fill();
@@ -968,50 +972,53 @@ void AddNeutralPFOCovMat::check(EVENT::LCEvent *pLCEvent)
 void AddNeutralPFOCovMat::end()
 {
 
-	m_pTFile->cd();
-	m_pTTree->Write();
-	m_Histograms->cd();
-	h_clusterE_pfoE->Write();
-	h_NeutPFO_PDG->Write();
-	h_NeutPFO_TYPE->Write();
-	h_NeutPFO_IDasPhoton->Write();
-	h_NeutPFO_IDasOther->Write();
-	h_NeutPFO_Weight->Write();
-	h_NH_EclusterPlusMass_Emcp->Write();
-	h_NHEnergy->Write();
-	m_CovMatElements->cd();
-	h_SigmaPx2->Write();
-	h_SigmaPxPy->Write();
-	h_SigmaPy2->Write();
-	h_SigmaPxPz->Write();
-	h_SigmaPyPz->Write();
-	h_SigmaPz2->Write();
-	h_SigmaPxE->Write();
-	h_SigmaPyE->Write();
-	h_SigmaPzE->Write();
-	h_SigmaE2->Write();
-	m_Photon->cd();
-	h_ResidualEnergy_ph->Write();
-	h_ResidualTheta_ph->Write();
-	h_ResidualPhi_ph->Write();
-	h_ErrorEnergy_ph->Write();
-	h_ErrorTheta_ph->Write();
-	h_ErrorPhi_ph->Write();
-	h_NormalizedResidualEnergy_ph->Write();
-	h_NormalizedResidualTheta_ph->Write();
-	h_NormalizedResidualPhi_ph->Write();
-	m_NeutralPFO->cd();
-	h_ResidualEnergy_NH->Write();
-	h_ResidualTheta_NH->Write();
-	h_ResidualPhi_NH->Write();
-	h_ErrorEnergy_NH->Write();
-	h_ErrorTheta_NH->Write();
-	h_ErrorPhi_NH->Write();
-	h_NormalizedResidualEnergy_NH->Write();
-	h_NormalizedResidualTheta_NH->Write();
-	h_NormalizedResidualPhi_NH->Write();
-	m_pTFile->Close();
-	delete m_pTFile;
+	if ( m_fillRootTree )
+	{
+		m_pTFile->cd();
+		m_pTTree->Write();
+		m_Histograms->cd();
+		h_clusterE_pfoE->Write();
+		h_NeutPFO_PDG->Write();
+		h_NeutPFO_TYPE->Write();
+		h_NeutPFO_IDasPhoton->Write();
+		h_NeutPFO_IDasOther->Write();
+		h_NeutPFO_Weight->Write();
+		h_NH_EclusterPlusMass_Emcp->Write();
+		h_NHEnergy->Write();
+		m_CovMatElements->cd();
+		h_SigmaPx2->Write();
+		h_SigmaPxPy->Write();
+		h_SigmaPy2->Write();
+		h_SigmaPxPz->Write();
+		h_SigmaPyPz->Write();
+		h_SigmaPz2->Write();
+		h_SigmaPxE->Write();
+		h_SigmaPyE->Write();
+		h_SigmaPzE->Write();
+		h_SigmaE2->Write();
+		m_Photon->cd();
+		h_ResidualEnergy_ph->Write();
+		h_ResidualTheta_ph->Write();
+		h_ResidualPhi_ph->Write();
+		h_ErrorEnergy_ph->Write();
+		h_ErrorTheta_ph->Write();
+		h_ErrorPhi_ph->Write();
+		h_NormalizedResidualEnergy_ph->Write();
+		h_NormalizedResidualTheta_ph->Write();
+		h_NormalizedResidualPhi_ph->Write();
+		m_NeutralPFO->cd();
+		h_ResidualEnergy_NH->Write();
+		h_ResidualTheta_NH->Write();
+		h_ResidualPhi_NH->Write();
+		h_ErrorEnergy_NH->Write();
+		h_ErrorTheta_NH->Write();
+		h_ErrorPhi_NH->Write();
+		h_NormalizedResidualEnergy_NH->Write();
+		h_NormalizedResidualTheta_NH->Write();
+		h_NormalizedResidualPhi_NH->Write();
+		m_pTFile->Close();
+		delete m_pTFile;
+	}
 
 //	std::cout << " END : processed events: " << m_nEvtSum << std::endl;
 
