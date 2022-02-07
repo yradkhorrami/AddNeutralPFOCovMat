@@ -92,7 +92,8 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 {
 
 	LCCollection *inputPfoCollection{};
-	LCCollectionVec *outputPfoCollection = new LCCollectionVec( LCIO::RECONSTRUCTEDPARTICLE );;
+	IMPL::LCCollectionVec* outputPfoCollection(NULL);
+	outputPfoCollection = new IMPL::LCCollectionVec( LCIO::RECONSTRUCTEDPARTICLE );
 	outputPfoCollection->setSubset( true );
 	int n_PFO = -1;
 	this->Clear();
@@ -118,9 +119,6 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 			TLorentzVector pfoFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
 			double outputPFOMomentum[3]{0., 0., 0.};
 			std::vector<float> outputCovMatrix( 10 , 0.0 );
-			std::vector<float> PFOResidual( 3 , 0.0 );
-			std::vector<float> PFOCovMatPolar( 10 , 0.0 );
-			std::vector<float> PFOCoordinateError( 6 , 0.0 );
 			if ( ( outputPFO->getTracks() ).size() == 0 )
 			{
 				if ( !m_AssumeNeutralPFOMassive ) pfoMass = 0.0;
@@ -161,11 +159,12 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 				outputPFOMomentum[ 2 ] = pfoFourMomentum.Pz();
 				pfoE = pfoFourMomentum.E();
 
+				outputPFO->setCovMatrix( outputCovMatrix );
+/*
 				outputPFO->setType(outputPFO->getType());
 				outputPFO->setMomentum( outputPFOMomentum );
 				outputPFO->setEnergy( pfoE );
 				outputPFO->setMass( outputPFO->getMass() );
-				outputPFO->setCovMatrix( outputCovMatrix );
 				outputPFO->setCharge(outputPFO->getCharge());
 				outputPFO->setReferencePoint(outputPFO->getReferencePoint());
 				for (unsigned int j=0; j<outputPFO->getParticleIDs().size(); ++j)
@@ -194,7 +193,7 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 					outputPFO->addTrack(outputPFO->getTracks()[j]);
 				}
 				outputPFO->setStartVertex(outputPFO->getStartVertex());
-			}
+*/			}
 			outputPfoCollection->addElement( outputPFO );
 		}
 		pLCEvent->addCollection( outputPfoCollection , m_outputPfoCollection );
