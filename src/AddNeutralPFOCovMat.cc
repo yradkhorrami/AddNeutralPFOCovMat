@@ -159,14 +159,14 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 				outputPFOMomentum[ 2 ] = pfoFourMomentum.Pz();
 				pfoE = pfoFourMomentum.E();
 
+
+//				outputPFO->setType(outputPFO->getType());
+//				outputPFO->setMomentum( outputPFOMomentum );
+//				outputPFO->setEnergy( pfoE );
+//				outputPFO->setMass( outputPFO->getMass() );
+//				outputPFO->setCharge(outputPFO->getCharge());
 				outputPFO->setCovMatrix( outputCovMatrix );
-/*
-				outputPFO->setType(outputPFO->getType());
-				outputPFO->setMomentum( outputPFOMomentum );
-				outputPFO->setEnergy( pfoE );
-				outputPFO->setMass( outputPFO->getMass() );
-				outputPFO->setCharge(outputPFO->getCharge());
-				outputPFO->setReferencePoint(outputPFO->getReferencePoint());
+/*				outputPFO->setReferencePoint(outputPFO->getReferencePoint());
 				for (unsigned int j=0; j<outputPFO->getParticleIDs().size(); ++j)
 				{
 					ParticleIDImpl* inPID = dynamic_cast<ParticleIDImpl*>(outputPFO->getParticleIDs()[j]);
