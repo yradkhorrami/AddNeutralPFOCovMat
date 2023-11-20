@@ -6,6 +6,7 @@
 #include <EVENT/MCParticle.h>
 #include "IMPL/LCCollectionVec.h"
 #include <IMPL/ReconstructedParticleImpl.h>
+#include "DDMarlinCED.h"
 #include "TLorentzVector.h"
 #include "TVector3.h"
 #include "lcio.h"

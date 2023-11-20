@@ -42,7 +42,7 @@ Processor("AddNeutralPFOCovMat")
 					"outputPfoCollection",
 					"Name of output pfo collection",
 					m_outputPfoCollection,
-					std::string("CorrectedPfoCollection")
+					std::string("updatedNeutralPFOs")
 				);
 
 	registerProcessorParameter(	"AssumeNeutralPFOMassive",
@@ -110,10 +110,11 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 		streamlog_out(DEBUG7) << "	Total Number of PFOs: " << n_PFO << std::endl;
 		for (int i_pfo = 0; i_pfo < n_PFO ; ++i_pfo)
 		{
+			ReconstructedParticleImpl* outputPFO = dynamic_cast<ReconstructedParticleImpl*>( inputPfoCollection->getElementAt( i_pfo ) );
+			streamlog_out(DEBUG6) << "" << std::endl;
 			streamlog_out(DEBUG6) << "	-------------------------------------------------------" << std::endl;
 			streamlog_out(DEBUG6) << "	Processing PFO at index " << i_pfo << std::endl;
-			streamlog_out(DEBUG6) << "" << std::endl;
-			ReconstructedParticleImpl* outputPFO = dynamic_cast<ReconstructedParticleImpl*>( inputPfoCollection->getElementAt( i_pfo ) );
+			streamlog_out(DEBUG5) << *outputPFO << std::endl;
 			float pfoMass = outputPFO->getMass();
 			TVector3 clusterPosition( 0.0 , 0.0 , 0.0 );
 			TLorentzVector pfoFourMomentum( 0.0 , 0.0 , 0.0 , 0.0 );
@@ -193,15 +194,18 @@ void AddNeutralPFOCovMat::processEvent( EVENT::LCEvent *pLCEvent )
 					outputPFO->addTrack(outputPFO->getTracks()[j]);
 				}
 				outputPFO->setStartVertex(outputPFO->getStartVertex());
-*/			}
+*/
+				streamlog_out(DEBUG6) << "	Updated PFO:" << std::endl;
+				streamlog_out(DEBUG5) << *outputPFO << std::endl;
+			}
 			outputPfoCollection->addElement( outputPFO );
 		}
 		pLCEvent->addCollection( outputPfoCollection , m_outputPfoCollection );
 	}
-        catch(DataNotAvailableException &e)
-        {
-          streamlog_out(MESSAGE) << "Input collection not found in event " << pLCEvent->getEventNumber() << std::endl;
-        }
+	catch(DataNotAvailableException &e)
+	{
+		streamlog_out(MESSAGE) << "Input collection not found in event " << pLCEvent->getEventNumber() << std::endl;
+	}
 
 }
 
@@ -256,7 +260,7 @@ std::vector<float> AddNeutralPFOCovMat::getNeutralCovMat( TVector3 clusterPositi
 	const int kspace_time_dim	= 4;
 
 	TMatrixD covMatrixMomenta(kspace_time_dim,kspace_time_dim);
-	std::vector<float> covP;
+	std::vector<float> covP; covP.clear();
 
 //	pfoMass			= 0.0;
 
@@ -281,7 +285,26 @@ std::vector<float> AddNeutralPFOCovMat::getNeutralCovMat( TVector3 clusterPositi
 	float pfoE = ( m_isClusterEnergyKinEnergy ? sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) ) : sqrt( pow( pfoP , 2 ) + pow( pfoMass , 2 ) ) );
 	float derivative_coeff	= ( ( m_useTrueJacobian && !m_isClusterEnergyKinEnergy ) ? pfoP / pfoE : 1.0 );
 
-	streamlog_out(DEBUG0) << "	Cluster information obtained" << std::endl;
+	streamlog_out(DEBUG0) << "	Cluster information obtained:" << std::endl;
+	streamlog_out(DEBUG0) << "		Cluster Information:" << std::endl;
+	streamlog_out(DEBUG0) << "		X = " << pfoX << "	, Y = " << pfoY << "	, Z = " << pfoZ << "	, Energy = " << pfoEc << "	, Mass = " << pfoMass << std::endl;
+//	cluster covariance matrix by rows
+	double cluster_cov_matrix_by_rows[rows*rows] =
+	{
+		SigmaX2		,	SigmaXY		,	SigmaXZ		,	0	,
+		SigmaXY		,	SigmaY2		,	SigmaYZ		,	0	,
+		SigmaXZ		,	SigmaYZ		,	SigmaZ2		,	0	,
+		0		,	0		,	0		,	SigmaE2
+	};
+	TMatrixD covMatrix_cluster(rows,rows, cluster_cov_matrix_by_rows, "C");
+	streamlog_out(DEBUG0) << "	Cluster covariance matrix array converted to cluster covariance matrix" << std::endl;
+
+	streamlog_out(DEBUG0) << "		Cluster Position Error:" << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrix_cluster( 0 , 0 ) << "	, " << covMatrix_cluster( 0 , 1 ) << "	, " << covMatrix_cluster( 0 , 2 ) << "	, " << covMatrix_cluster( 0 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrix_cluster( 1 , 0 ) << "	, " << covMatrix_cluster( 1 , 1 ) << "	, " << covMatrix_cluster( 1 , 2 ) << "	, " << covMatrix_cluster( 1 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrix_cluster( 2 , 0 ) << "	, " << covMatrix_cluster( 2 , 1 ) << "	, " << covMatrix_cluster( 2 , 2 ) << "	, " << covMatrix_cluster( 2 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrix_cluster( 3 , 0 ) << "	, " << covMatrix_cluster( 3 , 1 ) << "	, " << covMatrix_cluster( 3 , 2 ) << "	, " << covMatrix_cluster( 3 , 3 ) << std::endl;
+
 
 //	Define array with jacobian matrix elements by rows
 	double jacobian_by_rows[rows*columns] =
@@ -295,24 +318,24 @@ std::vector<float> AddNeutralPFOCovMat::getNeutralCovMat( TVector3 clusterPositi
 //	construct the Jacobian using previous array ("F" if filling by columns, "C" if filling by rows, $ROOTSYS/math/matrix/src/TMatrixT.cxx)
 	TMatrixD jacobian(rows,columns, jacobian_by_rows, "C");
 	streamlog_out(DEBUG0) << "	Jacobian array converted to Jacobian matrix" << std::endl;
+	streamlog_out(DEBUG0) << "		Jacobian:" << std::endl;
+	streamlog_out(DEBUG0) << "			" << jacobian( 0 , 0 ) << "	, " << jacobian( 0 , 1 ) << "	, " << jacobian( 0 , 2 ) << "	, " << jacobian( 0 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << jacobian( 1 , 0 ) << "	, " << jacobian( 1 , 1 ) << "	, " << jacobian( 1 , 2 ) << "	, " << jacobian( 1 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << jacobian( 2 , 0 ) << "	, " << jacobian( 2 , 1 ) << "	, " << jacobian( 2 , 2 ) << "	, " << jacobian( 2 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << jacobian( 3 , 0 ) << "	, " << jacobian( 3 , 1 ) << "	, " << jacobian( 3 , 2 ) << "	, " << jacobian( 3 , 3 ) << std::endl;
 
-//	cluster covariance matrix by rows
-	double cluster_cov_matrix_by_rows[rows*rows] =
-			{
-				SigmaX2		,	SigmaXY		,	SigmaXZ		,	0	,
-				SigmaXY		,	SigmaY2		,	SigmaYZ		,	0	,
-				SigmaXZ		,	SigmaYZ		,	SigmaZ2		,	0	,
-				0		,	0		,	0		,	SigmaE2
-			};
-
-	TMatrixD covMatrix_cluster(rows,rows, cluster_cov_matrix_by_rows, "C");
-	streamlog_out(DEBUG0) << "	Cluster covariance matrix array converted to cluster covariance matrix" << std::endl;
 
 	covMatrixMomenta.Mult( TMatrixD( jacobian ,
 					TMatrixD::kTransposeMult ,
 					covMatrix_cluster) ,
 					jacobian
 					);
+
+	streamlog_out(DEBUG0) << "		PFO Covariance Matrix:" << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrixMomenta( 0 , 0 ) << "	, " << covMatrixMomenta( 0 , 1 ) << "	, " << covMatrixMomenta( 0 , 2 ) << "	, " << covMatrixMomenta( 0 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrixMomenta( 1 , 0 ) << "	, " << covMatrixMomenta( 1 , 1 ) << "	, " << covMatrixMomenta( 1 , 2 ) << "	, " << covMatrixMomenta( 1 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrixMomenta( 2 , 0 ) << "	, " << covMatrixMomenta( 2 , 1 ) << "	, " << covMatrixMomenta( 2 , 2 ) << "	, " << covMatrixMomenta( 2 , 3 ) << std::endl;
+	streamlog_out(DEBUG0) << "			" << covMatrixMomenta( 3 , 0 ) << "	, " << covMatrixMomenta( 3 , 1 ) << "	, " << covMatrixMomenta( 3 , 2 ) << "	, " << covMatrixMomenta( 3 , 3 ) << std::endl;
 
 	covP.push_back( covMatrixMomenta(0,0) ); // x-x
 	covP.push_back( covMatrixMomenta(1,0) ); // y-x
@@ -324,7 +347,7 @@ std::vector<float> AddNeutralPFOCovMat::getNeutralCovMat( TVector3 clusterPositi
 	covP.push_back( covMatrixMomenta(3,1) ); // e-y
 	covP.push_back( covMatrixMomenta(3,2) ); // e-z
 	covP.push_back( covMatrixMomenta(3,3) ); // e-e
-	streamlog_out(DEBUG0) << "	FourMomentumCovarianceMatrix Filled succesfully" << std::endl;
+	if ( covP.size() == 10 ) streamlog_out(DEBUG0) << "	FourMomentumCovarianceMatrix Filled succesfully" << std::endl;
 
 	return covP;
 
